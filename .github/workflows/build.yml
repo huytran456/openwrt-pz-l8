@@ -25,7 +25,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [AP, Router]
+        mode: [Router]
+        # mode: [AP, Router]
 
     steps:
       - name: Free disk space
