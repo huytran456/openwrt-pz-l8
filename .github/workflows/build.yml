@@ -59,7 +59,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: openwrt/openwrt
-          ref: main
+          ref: openwrt-25.12
           path: openwrt
           fetch-depth: 0
 
@@ -452,16 +452,9 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release
-
-          # Copy and rename AP files
-          for f in artifacts/ap/*-sysupgrade.bin; do
-            [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-sysupgrade-ap.bin"
-          done
-
-          # Copy and rename Router files
-          for f in artifacts/router/*-sysupgrade.bin; do
-            [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-sysupgrade-router.bin"
-          done
+          
+          # Copy and rename Router files        
+          cp -r artifacts/router/* release/
 
           # Generate sha256sums
           cd release
