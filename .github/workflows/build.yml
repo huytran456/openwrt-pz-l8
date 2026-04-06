@@ -62,23 +62,6 @@ jobs:
           path: openwrt
           fetch-depth: 0
 
-      - name: Merge PR #21495 (AP)
-        if: matrix.mode == 'AP'
-        working-directory: openwrt
-        run: |
-          git config user.email "builder@github.com"
-          git config user.name "GitHub Actions"
-
-          # PR #21495: PZ-L8 support + ath11k-smallbuffers
-          git fetch origin pull/21495/head:pr-21495
-          git merge pr-21495 --no-edit
-
-          # Revert ipq-wifi/Makefile changes - we handle BDF files manually
-          git checkout HEAD -- package/firmware/ipq-wifi/Makefile || true
-
-          echo "=== Merge status ==="
-          git status --short
-
       - name: Merge PR #21495 + #21496 (Router)
         if: matrix.mode == 'Router'
         working-directory: openwrt
