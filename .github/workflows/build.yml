@@ -126,11 +126,15 @@ jobs:
           ccache --set-config=compression=true
           ccache -z
 
-      - name: Update feeds
+      - name: Update feeds, batman-adv, openssl
         working-directory: openwrt
         run: |
           ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          ./scripts/feeds install -a    
+          ./scripts/feeds install kmod-batman-adv || true
+          ./scripts/feeds install batctl || true
+          ./scripts/feeds install luci-proto-batman-adv || true
+          ./scripts/feeds install wpad-openssl libustream-openssl || true
 
       - name: Generate configuration (Router)
         if: matrix.mode == 'Router'
@@ -210,9 +214,18 @@ jobs:
 
           CONFIG_PACKAGE_iw=y
           CONFIG_PACKAGE_iwinfo=y
+
+          # Enable batman-adv
+          CONFIG_PACKAGE_kmod-batman-adv=y
+          CONFIG_PACKAGE_batctl=y
+          CONFIG_PACKAGE_luci-proto-batman-adv=y
+          
+          # OpenSSL
+          CONFIG_PACKAGE_wpad-openssl=y
+          CONFIG_PACKAGE_libustream-openssl=y
+          CONFIG_PACKAGE_libopenssl=y
           EOF
 
-          make defconfig
           make defconfig
 
       - name: Download sources
