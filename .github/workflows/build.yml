@@ -8,14 +8,15 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag (leave empty for no release)'
+        description: "Release tag (leave empty for no release)"
         required: false
-        default: ''
+        default: ""
 
 env:
   TARGET: qualcommax
   SUBTARGET: ipq50xx
   DEVICE: cmcc_pz-l8
+  CONFIG_FILE: pz-l8.config
 
 jobs:
   build:
@@ -58,7 +59,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: openwrt/openwrt
-          ref: openwrt-25.12
+          ref: main
           path: openwrt
           fetch-depth: 0
 
@@ -132,143 +133,10 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Create custom files for AP mode
-        if: matrix.mode == 'AP'
-        working-directory: openwrt
+      - name: Load custom configuration
         run: |
-          mkdir -p files/etc/uci-defaults
-          mkdir -p files/etc/config
-
-          cat > files/etc/config/network << 'EOF'
-          config interface 'loopback'
-              option device 'lo'
-              option proto 'static'
-              option ipaddr '127.0.0.1'
-              option netmask '255.0.0.0'
-
-          config device
-              option name 'br-lan'
-              option type 'bridge'
-              list ports 'lan1'
-              list ports 'lan2'
-              list ports 'lan3'
-              list ports 'wan'
-
-          config interface 'lan'
-              option device 'br-lan'
-              option proto 'dhcp'
-
-          config interface 'lan_static'
-              option device 'br-lan'
-              option proto 'static'
-              option ipaddr '192.168.10.1'
-              option netmask '255.255.255.0'
-          EOF
-
-          cat > files/etc/uci-defaults/99-ap-mode-network << 'UCI'
-          #!/bin/sh
-          uci set system.@system[0].hostname='OpenWrt-AP'
-          uci set network.lan='interface'
-          uci set network.lan.device='br-lan'
-          uci set network.lan.proto='dhcp'
-          uci set network.lan_static='interface'
-          uci set network.lan_static.device='br-lan'
-          uci set network.lan_static.proto='static'
-          uci set network.lan_static.ipaddr='192.168.10.1'
-          uci set network.lan_static.netmask='255.255.255.0'
-          uci commit network
-          exit 0
-          UCI
-          chmod +x files/etc/uci-defaults/99-ap-mode-network
-
-          mkdir -p files/etc/sysctl.d
-          cat > files/etc/sysctl.d/99-ipv6-ap.conf << 'EOF'
-          net.ipv6.conf.br-lan.accept_ra = 2
-          net.ipv6.conf.br-lan.forwarding = 0
-          net.ipv6.conf.default.accept_ra = 2
-          net.ipv6.conf.default.forwarding = 0
-          EOF
-
-
-      - name: Generate configuration (Router)
-        if: matrix.mode == 'Router'
-        working-directory: openwrt
-        run: |
-          cat > .config << 'EOF'
-          # Target
-          CONFIG_TARGET_qualcommax=y
-          CONFIG_TARGET_qualcommax_ipq50xx=y
-          CONFIG_TARGET_qualcommax_ipq50xx_DEVICE_cmcc_pz-l8=y
-
-          # Build
-          CONFIG_DEVEL=y
-          CONFIG_CCACHE=y
-          CONFIG_USE_CCACHE=y
-          CONFIG_ALL_KMODS=y
-          CONFIG_ALL_NONSHARED=y
-
-          # Image
-          CONFIG_TARGET_ROOTFS_SQUASHFS=y
-          CONFIG_TARGET_IMAGES_GZIP=y
-          CONFIG_INCLUDE_CONFIG=y
-          CONFIG_TARGET_ROOTFS_UBIFS=y
-          CONFIG_TARGET_UBIFS_FREE_SPACE_FIXUP=y
-
-          # Kernel
-          CONFIG_KERNEL_CRASHLOG=y
-          CONFIG_KERNEL_SWAP=y
-          CONFIG_KERNEL_DEBUG_FS=y
-
-          # mbedtls
-          CONFIG_PACKAGE_libustream-mbedtls=y
-
-          # WiFi
-          CONFIG_PACKAGE_kmod-ath11k-ahb=y
-          CONFIG_PACKAGE_kmod-ath11k-smallbuffers=y
-          CONFIG_PACKAGE_ath11k-firmware-ipq5018-qcn6122=y
-          CONFIG_PACKAGE_wpad-basic-mbedtls=y
-
-          # LuCI
-          CONFIG_PACKAGE_luci=y
-
-          # Router packages
-          CONFIG_PACKAGE_apk-mbedtls=y
-          CONFIG_PACKAGE_base-files=y
-          CONFIG_PACKAGE_ca-bundle=y
-          CONFIG_PACKAGE_dnsmasq=y
-          CONFIG_PACKAGE_dropbear=y
-          CONFIG_PACKAGE_firewall4=y
-          CONFIG_PACKAGE_fstools=y
-          CONFIG_PACKAGE_kmod-gpio-button-hotplug=y
-          CONFIG_PACKAGE_kmod-leds-gpio=y
-          CONFIG_PACKAGE_kmod-nft-offload=y
-          CONFIG_PACKAGE_kmod-qca-nss-dp=y
-          CONFIG_PACKAGE_logd=y
-          CONFIG_PACKAGE_mtd=y
-          CONFIG_PACKAGE_netifd=y
-          CONFIG_PACKAGE_nftables=y
-          CONFIG_PACKAGE_odhcp6c=y
-          CONFIG_PACKAGE_odhcpd-ipv6only=y
-          CONFIG_PACKAGE_ppp=y
-          CONFIG_PACKAGE_ppp-mod-pppoe=y
-          CONFIG_PACKAGE_procd-ujail=y
-          CONFIG_PACKAGE_uboot-envtools=y
-          CONFIG_PACKAGE_uci=y
-          CONFIG_PACKAGE_uclient-fetch=y
-          CONFIG_PACKAGE_urandom-seed=y
-          CONFIG_PACKAGE_urngd=y
-
-          # ZRAM
-          CONFIG_PACKAGE_kmod-zram=y
-          CONFIG_KERNEL_ZRAM_BACKEND_LZO=y
-          CONFIG_KERNEL_ZRAM_DEF_COMP_ZSTD=y
-          CONFIG_KERNEL_ZRAM_DEF_COMP_LZORLE=y
-          CONFIG_PACKAGE_zram-swap=y
-
-          CONFIG_PACKAGE_iw=y
-          CONFIG_PACKAGE_iwinfo=y
-          EOF
-          
+          [ -e files ] && mv files openwrt/files
+          [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config         
           make defconfig
 
       - name: Download sources
@@ -341,11 +209,6 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release
-
-          # Copy and rename AP files
-          for f in artifacts/ap/*-sysupgrade.bin; do
-            [ -f "$f" ] && cp "$f" "release/openwrt-pz-l8-sysupgrade-ap.bin"
-          done
 
           # Copy and rename Router files
           cp -r artifacts/router/* release/
